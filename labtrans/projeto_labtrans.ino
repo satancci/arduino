@@ -16,7 +16,7 @@
 // Variáveis
 int readMq2, readMq5, readMq9;
 int entradas[3][2] = { { 18, readMq2 }, { 21, readMq5 }, { 25, readMq9 } };
-String palavras[3][2] = { { "2", "Inflamavel" }, { "5", "Combustivel" }, { "9", "Toxico" } };
+String palavras[3][2] = { { "MQ-2", "Inflamavel" }, { "MQ-5", "Combustivel" }, { "MQ-9", "Toxico" } };
 String ip = "";
 
 void setup() {
@@ -30,7 +30,7 @@ void setup() {
 void loop() {
   for (int i = 0; i < 3; i++) {
     entradas[i][1] = digitalRead(entradas[i][0]);
-    Serial.println("[MQ-" + palavras[i][0] + "]: " + entradas[i][1]);
+    Serial.println("[" + palavras[i][0] + "]: " + entradas[i][1]);
     Firebase.setBool("Dispositivos/" + ip + "/" + palavras[i][1], entradas[i][1]);
   }
   delay(1000);
