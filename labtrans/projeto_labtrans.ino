@@ -14,7 +14,7 @@
 #define senha_banco "seu-secret-do-firebase"
 
 // Variáveis
-uint8_t readMq2 = 0, readMq5 = 0, readMq9 = 0;
+uint8_t readMq2, readMq5, readMq9;
 uint8_t entradas[3][2] = { { 18, readMq2 }, { 21, readMq5 }, { 25, readMq9 } };
 String palavras[3][2] = { { "MQ-2", "Inflamavel" }, { "MQ-5", "Combustivel" }, { "MQ-9", "Toxico" } };
 String ip = "";
