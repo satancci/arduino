@@ -1,0 +1,12 @@
+# Ignorar arquivos de configuração
+config.cpp
+config.h
+
+# Ignorar pastas de build
+/build/
+/lib/
+/src/
+
+# Ignorar arquivos binários e de compilação
+*.bin
+*.elf
