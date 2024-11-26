@@ -6,5 +6,4 @@
 #define variavel3 "valor_variavel3"
 #define variavel4 "valor_variavel4"
 
-
 #endif
