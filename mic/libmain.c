@@ -14,14 +14,14 @@ void pinMode(unsigned int pino, const char* modo){
     	gpio_ll_output_enable(&GPIO, pino);
     	return;
     }
-    if (strcmp(modo, "input_pullup")){
+    if (strcmp(modo, "input_pullup") == 0){
 		gpio_ll_output_disable(&GPIO, pino);
 		gpio_ll_input_enable(&GPIO, pino);
 		gpio_ll_pullup_en(&GPIO, pino);
 		gpio_ll_pulldown_dis(&GPIO, pino);
 		return;
 	}
-	if(strcmp(modo, "input_pulldown")){
+	if(strcmp(modo, "input_pulldown") == 0){
 		gpio_ll_output_disable(&GPIO, pino);
 		gpio_ll_input_enable(&GPIO, pino);
 		gpio_ll_pullup_dis(&GPIO, pino);
