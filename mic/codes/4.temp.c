@@ -3,9 +3,30 @@
 #include "esp_attr.h" //IRAM_ATTR (alarme)
 #include "esp_task_wdt.h" //watchdog task (alarme)
 
-uint8_t centesimo = 0; //variavel de contagem de centesimos de segundo
-uint8_t segundo = 0; //variavel de contagem de segundo  
-uint8_t minuto = 0; //variavel de contagem de minuto
+#define IO_MUX_GPIOn_REG(n) (0x60009004+4*n)
+#define GPIO_FUNCn_OUT_SEL_CFG_REG(n) (0x60004554+4*n)
+
+#define GPIO_ENABLE_REG 0x60004020
+#define GPIO_OUT_REG 0x60004004
+
+unsigned int *pEnable = (unsigned int *)GPIO_ENABLE_REG;
+unsigned int *pOut = (unsigned int *)GPIO_OUT_REG;
+
+uint8_t centesimo = 0; 
+uint8_t segundo = 0; 
+uint8_t minuto = 0; 
+
+
+void configura_io_mux(unsigned char pino){
+    if (pino > 21) return;
+    // Configura a função do pino
+    int *ptr = IO_MUX_GPIOn_REG(pino);
+    *ptr = 0x1800;
+   
+    // Desconecta os periféricos associados
+    ptr = GPIO_FUNCn_OUT_SEL_CFG_REG(pino);
+    *ptr = 0x280;
+}
 
 bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     centesimo++; 
@@ -41,13 +62,39 @@ void configura_alarme(uint64_t tempo_alarme){
     gptimer_start(temporizador);
 }
 
+char show_number(int val){
+   switch (val)
+   {
+        case 0:  return 0xC0;
+        case 1:  return 0xF9;
+        case 2:  return 0xA4;
+        case 3:  return 0xB0;
+        case 4:  return 0x99;
+        case 5:  return 0x92;
+        case 6:  return 0x82;
+        case 7:  return 0xF8;
+        case 8:  return 0x80;
+        case 9:  return 0x90;
+        default: return 0xC0;
+   }
+}
 void principal(){
     centesimo >= 100 ? (segundo++, centesimo = 0) : centesimo;
     segundo >= 60 ? (minuto++, segundo = 0) : segundo;
     minuto >= 60 ? (minuto = 0) : minuto;
-    //completar o restante do código aqui
+
+    *pOut = (0x0<<8) | show_number(centesimo%10);
+    *pOut = (0x1<<8) | show_number((int)(centesimo/10));
+    *pOut = (0x2<<8) | show_number(segundo%10);
+    *pOut = (0x3<<8) | show_number((int)(segundo/10));
+    *pOut = (0x4<<8) | show_number(minuto%10);
+    *pOut = (0x5<<8) | show_number((int)(minuto/10));
+
 }
+
 void app_main(void) {
+    for (int i = 4; i<11; i++) configura_io_mux(i);
+    *pEnable = 0x7FF;
     esp_task_wdt_deinit();
     configura_alarme(10000); 
     while (1) {
