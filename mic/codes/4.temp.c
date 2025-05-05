@@ -78,7 +78,15 @@ char show_number(int val){
         default: return 0xC0;
    }
 }
-void principal(){
+
+void setup(){
+    for (int i = 0; i<11; i++) configura_io_mux(i);
+    *pEnable = 0x7FF;
+    esp_task_wdt_deinit();
+    configura_alarme(10000); 
+}
+
+void loop(){
     centesimo >= 100 ? (segundo++, centesimo = 0) : centesimo;
     segundo >= 60 ? (minuto++, segundo = 0) : segundo;
     minuto >= 60 ? (minuto = 0) : minuto;
@@ -89,15 +97,11 @@ void principal(){
     *pOut = (0x3<<8) | show_number((int)(segundo/10));
     *pOut = (0x4<<8) | show_number(minuto%10);
     *pOut = (0x5<<8) | show_number((int)(minuto/10));
-
 }
 
 void app_main(void) {
-    for (int i = 4; i<11; i++) configura_io_mux(i);
-    *pEnable = 0x7FF;
-    esp_task_wdt_deinit();
-    configura_alarme(10000); 
+    setup();
     while (1) {
-        principal();
+        loop();
     }
 }
