@@ -1,36 +1,21 @@
 #include "driver/gptimer.h" //temporizador
+#include "driver/gpio.h"
 #include "stdint.h" //uints
 #include "esp_attr.h" //IRAM_ATTR (alarme)
 #include "esp_task_wdt.h" //watchdog task (alarme)
 
-#define IO_MUX_GPIOn_REG(n) (0x60009004+4*n)
-#define GPIO_FUNCn_OUT_SEL_CFG_REG(n) (0x60004554+4*n)
-
-#define GPIO_ENABLE_REG 0x60004020
 #define GPIO_OUT_REG 0x60004004
 
-unsigned int *pEnable = (unsigned int *)GPIO_ENABLE_REG;
 unsigned int *pOut = (unsigned int *)GPIO_OUT_REG;
 
-uint8_t centesimo = 0; 
-uint8_t segundo = 0; 
-uint8_t minuto = 0; 
+uint8_t centesimo = 0;
+uint8_t segundo = 0;
+uint8_t minuto = 0;
 
-
-void configura_io_mux(unsigned char pino){
-    if (pino > 21) return;
-    // Configura a função do pino
-    int *ptr = IO_MUX_GPIOn_REG(pino);
-    *ptr = 0x1800;
-   
-    // Desconecta os periféricos associados
-    ptr = GPIO_FUNCn_OUT_SEL_CFG_REG(pino);
-    *ptr = 0x280;
-}
 
 bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
-    centesimo++; 
-    return true; 
+    centesimo++;
+    return true;
 }
 
 void configura_alarme(uint64_t tempo_alarme){
@@ -41,19 +26,19 @@ void configura_alarme(uint64_t tempo_alarme){
       .direction = GPTIMER_COUNT_UP, // Contagem crescente
       .resolution_hz = 1000000, // Resolucao em 1 MHz
     };
-  
+
     //Configura o alarme
     gptimer_alarm_config_t config_alarme = {
       .alarm_count = tempo_alarme, // em microsegundos
       .reload_count = 0, // Reinicia do zero
       .flags.auto_reload_on_alarm = true, // Reinicia automaticamente
     };
-  
+
     //Configura o callback do alarme
     gptimer_event_callbacks_t config_callback = {
       .on_alarm = alarme,
     };
-  
+
     // Cria o temporizador, seta o alarme e registra o callback
     gptimer_new_timer(&config_temporizador, &temporizador);
     gptimer_register_event_callbacks(temporizador, &config_callback, NULL) ;
@@ -61,6 +46,9 @@ void configura_alarme(uint64_t tempo_alarme){
     gptimer_enable(temporizador);
     gptimer_start(temporizador);
 }
+void delay(int ciclos){
+    for (volatile int i = 0; i < ciclos * 10000; i++);
+};
 
 char show_number(int val){
    switch (val)
@@ -80,10 +68,14 @@ char show_number(int val){
 }
 
 void setup(){
-    for (int i = 0; i<11; i++) configura_io_mux(i);
-    *pEnable = 0x7FF;
     esp_task_wdt_deinit();
-    configura_alarme(10000); 
+    gpio_config_t config_gpio = {
+    		.pin_bit_mask = 0x7FF,
+			.mode = GPIO_MODE_OUTPUT
+    };
+    gpio_config(&config_gpio);
+
+    configura_alarme(10000);
 }
 
 void loop(){
@@ -92,11 +84,17 @@ void loop(){
     minuto >= 60 ? (minuto = 0) : minuto;
 
     *pOut = (0x0<<8) | show_number(centesimo%10);
+    delay(2);
     *pOut = (0x1<<8) | show_number((int)(centesimo/10));
+    delay(2);
     *pOut = (0x2<<8) | show_number(segundo%10);
+    delay(2);
     *pOut = (0x3<<8) | show_number((int)(segundo/10));
+    delay(2);
     *pOut = (0x4<<8) | show_number(minuto%10);
+    delay(2);
     *pOut = (0x5<<8) | show_number((int)(minuto/10));
+    delay(2);
 }
 
 void app_main(void) {
