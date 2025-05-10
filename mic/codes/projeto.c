@@ -31,7 +31,7 @@ static void interrupcao(void *arg){
 }
 
 bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
-    habilitado ? milesimo++ : milesimo;
+    if(habilitado) milesimo++;
     return true;
 }
 
@@ -90,13 +90,13 @@ void setup(){
 }
 
 void loop(){
-    milesimo >= 1000 ? (segundo++, milesimo = 0) : milesimo;
-    segundo >= 60 ? (minuto++, segundo = 0) : segundo;
-    minuto >= 60 ? (minuto = 0) : minuto;
+    if(milesimo >= 1000)(segundo++, milesimo = 0);
+    if(segundo >= 60)(minuto++, segundo = 0);
+    if(minuto >= 60) minuto = 0;
 
-    vmilesimo >= 1000 ? (vsegundo++, vmilesimo = 0) : vmilesimo;
-    vsegundo >= 60 ? (vminuto++, vsegundo = 0) : vsegundo;
-    vminuto >= 60 ? (vminuto = 0) : vminuto;
+    if(vmilesimo >= 1000)(vsegundo++, vmilesimo = 0);
+    if(vsegundo >= 60)(vminuto++, vsegundo = 0);
+    if(vminuto >= 60) vminuto = 0;
     
     char btempo[20];
     char bvolta[20];
