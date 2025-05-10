@@ -24,7 +24,7 @@ static void interrupcao(void *arg){
     switch ((unsigned int) arg) {
         case 0: habilitado = true;  break;
         case 1: habilitado = false; break;
-        case 2: vmilesimo = milesimo; vsegundo = segundo; vminuto = minuto;  break;
+        case 2: (vmilesimo = milesimo, vsegundo = segundo, vminuto = minuto);  break;
         case 3: if(!habilitado) (milesimo = segundo = minuto = vmilesimo = vsegundo = vminuto = 0);  break;
         default: break;
     }
