@@ -5,12 +5,12 @@
 #include "esp_attr.h"       // Inclui atributos especiais para funções (ex: IRAM_ATTR)
 #include "esp_task_wdt.h"   // Inclui funções para manipulação do watchdog timer
 
-uint16_t milesimo, vmilesimo; // Variáveis para milésimos do cronômetro e da volta
-uint8_t segundo, vsegundo;    // Variáveis para segundos do cronômetro e da volta
-uint8_t minuto, vminuto;      // Variáveis para minutos do cronômetro e da volta
+uint16_t milesimo, vmilesimo, antigomilesimo; // Variáveis para milésimos do cronômetro e da volta
+uint8_t segundo, vsegundo, antigosegundo;    // Variáveis para segundos do cronômetro e da volta
+uint8_t minuto, vminuto, antigominuto;      // Variáveis para minutos do cronômetro e da volta
 
-bool habilitado = false;      // Flag que indica se o cronômetro está rodando
-
+bool habilitado = false;  // Flag que indica se o cronômetro está rodando
+bool reload; 
 // Estrutura de configuração dos pinos do display LCD
 display_lcd_config_t config_display = {
     .D4 = 5,  // Pino D4 do LCD conectado ao GPIO 5
@@ -26,20 +26,29 @@ static void interrupcao(void *arg){
     switch ((unsigned int) arg) { // Converte o argumento para inteiro (número do botão)
         case 0: habilitado = true;  break; // Botão 0: inicia o cronômetro
         case 1: habilitado = false; break; // Botão 1: pausa o cronômetro
-        case 2: (vmilesimo = milesimo, vsegundo = segundo, vminuto = minuto); break;
-        case 3: if(!habilitado) (milesimo = segundo = minuto = vmilesimo = vsegundo = vminuto = 0); break;
+        case 2: reload = true;	break;
+        case 3: if(!habilitado) (milesimo = segundo = minuto = vmilesimo = vsegundo = vminuto = 0, reload = true); break;
         default: break; // Outros valores: não faz nada
     }
 }
 
 // Função de callback chamada pelo temporizador a cada alarme
 bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
-    if(habilitado) milesimo++; // Incrementa milésimos se o cronômetro estiver habilitado
+    if(habilitado) (milesimo++, vmilesimo++); // Incrementa milésimos se o cronômetro estiver habilitado
     return true; // Indica que o alarme foi tratado
 }
 
 // Configura a interrupção para um pino específico
 void configura_isr(unsigned int pino_isr){
+/*
+	esp_timer_handle_t debounce_timer ; // Instancia o manipulador do timer
+		const esp_timer_create_args_t timer_args = {
+			.callback = &debounce_timer_callback,
+			.name = "debounce_timer"
+	 };
+
+ esp_timer_create (&timer_args, & debounce_timer);
+	*/
     gpio_config_t io_config = {
       .pin_bit_mask = (1 << pino_isr),           // Seleciona o pino
       .mode = GPIO_MODE_INPUT,                   // Define como entrada
@@ -88,8 +97,9 @@ void delay(int ciclos){
 void setup(){
     esp_task_wdt_deinit();         // Desabilita o watchdog timer da task principal
     lcd_config(&config_display);   // Inicializa o display LCD
-    for(int i=0; i<4; i++) configura_isr(i);    // Configura as interrupções dos 4 botões
+    for(int i=0; i<4; i++) configura_isr(i);    // Configura as interrupções dos 4 botões (0, 1, 2 e 3)
     configura_alarme(1000);        // Configura o alarme do temporizador para 1 ms
+    lcd_escreve_2_linhas("Tempo 00:00:000", "Volta 00:00:000");
 }
 
 // Função principal de repetição (loop)
@@ -101,13 +111,19 @@ void loop(){
     if(vmilesimo >= 1000) (vsegundo++, vmilesimo = 0); // Atualiza volta: 1000 ms = 1 s
     if(vsegundo >= 60)    (vminuto++, vsegundo = 0);   // Atualiza volta: 60 s = 1 min
     if(vminuto >= 60)     vminuto = 0;                 // Limita minutos da volta a 59
-    
+	
     char btempo[20]; // Buffer para string do tempo principal
     char bvolta[20]; // Buffer para string do tempo de volta
     snprintf(btempo, sizeof(btempo), "Tempo %02d:%02d:%03d", minuto, segundo, milesimo); // Monta string do tempo
-    snprintf(bvolta, sizeof(bvolta), "Volta %02d:%02d:%03d", vminuto, vsegundo, vmilesimo); // Monta string da volta
-    lcd_escreve_2_linhas(btempo, bvolta); // Escreve as duas linhas no display LCD
+    lcd_escreve_1_linha(btempo, 1);
+    if(reload){
+      snprintf(bvolta, sizeof(bvolta), "Volta %02d:%02d:%03d", vminuto, vsegundo, vmilesimo); // Monta string da volta
+      (vminuto = vsegundo = vmilesimo = 0);
+      lcd_escreve_1_linha(bvolta, 2);
+      reload = false;
+    }
     delay(10); // Pequeno atraso para evitar flicker
+	
 }
 
 // Função principal da aplicação (ponto de entrada)
