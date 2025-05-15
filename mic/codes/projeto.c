@@ -4,10 +4,12 @@
 #include "stdint.h"         // Inclui definições de tipos inteiros padrão (uint8_t, uint16_t, etc)
 #include "esp_attr.h"       // Inclui atributos especiais para funções (ex: IRAM_ATTR)
 #include "esp_task_wdt.h"   // Inclui funções para manipulação do watchdog timer
+#include "esp_timer.h"
+#include "esp_log.h"
 
-uint16_t milesimo, vmilesimo, antigomilesimo; // Variáveis para milésimos do cronômetro e da volta
-uint8_t segundo, vsegundo, antigosegundo;    // Variáveis para segundos do cronômetro e da volta
-uint8_t minuto, vminuto, antigominuto;      // Variáveis para minutos do cronômetro e da volta
+uint16_t milesimo, vmilesimo; // Variáveis para milésimos do cronômetro e da volta
+uint8_t segundo, vsegundo;    // Variáveis para segundos do cronômetro e da volta
+uint8_t minuto, vminuto;      // Variáveis para minutos do cronômetro e da volta
 
 bool habilitado = false;  // Flag que indica se o cronômetro está rodando
 bool reload; 
@@ -23,7 +25,14 @@ display_lcd_config_t config_display = {
 
 // Função de interrupção chamada ao pressionar um botão
 static void interrupcao(void *arg){
-    switch ((unsigned int) arg) { // Converte o argumento para inteiro (número do botão)
+    void **args = (void **)arg;
+    int botao = (int)(intptr_t)args[0];                     
+    esp_timer_handle_t debounce_timer = args[1];
+
+    gpio_intr_disable(botao);// Desabilita interrupcoes no pino
+    esp_timer_start_once(debounce_timer, 70000) ; // Inicia o timer de debounce e espera 70ms
+
+    switch (botao) { // Converte o argumento para inteiro (número do botão)
         case 0: habilitado = true;  break; // Botão 0: inicia o cronômetro
         case 1: habilitado = false; break; // Botão 1: pausa o cronômetro
         case 2: reload = true;	break;
@@ -38,17 +47,27 @@ bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_d
     return true; // Indica que o alarme foi tratado
 }
 
+// Função de callback chamada pelo temporizador para debouncing
+static void debounce_timer_callback(void *arg) {
+    int pino = (int)(intptr_t)arg;
+    while(gpio_get_level(pino) == 0) {} // Enquanto o botao ainda está pressionado
+    gpio_intr_enable(pino); // Reabilita a interrupcao
+}
+
 // Configura a interrupção para um pino específico
 void configura_isr(unsigned int pino_isr){
-/*
-	esp_timer_handle_t debounce_timer ; // Instancia o manipulador do timer
-		const esp_timer_create_args_t timer_args = {
-			.callback = &debounce_timer_callback,
-			.name = "debounce_timer"
+    esp_timer_handle_t debounce_timer; // Instancia o manipulador do timer
+    const esp_timer_create_args_t timer_args = {
+        .callback = &debounce_timer_callback,
+        .arg = (void *)(intptr_t)pino_isr,
+        .name = "debounce_timer"
 	 };
 
- esp_timer_create (&timer_args, & debounce_timer);
-	*/
+    esp_timer_create (&timer_args, &debounce_timer);
+    void **args = malloc(2);
+    args[0] = (void *)(intptr_t)pino_isr;    
+    args[1] = (void *)debounce_timer;
+
     gpio_config_t io_config = {
       .pin_bit_mask = (1 << pino_isr),           // Seleciona o pino
       .mode = GPIO_MODE_INPUT,                   // Define como entrada
@@ -59,7 +78,7 @@ void configura_isr(unsigned int pino_isr){
   
     gpio_config(&io_config); // Aplica a configuração do pino
     gpio_install_isr_service(ESP_INTR_FLAG_IRAM); // Instala o serviço de interrupção
-    gpio_isr_handler_add(pino_isr, interrupcao, (void* )pino_isr); // Associa a função de interrupção ao pino
+    gpio_isr_handler_add(pino_isr, interrupcao, args); // Associa a função de interrupção ao pino, passando dois argumentos
 }
 
 // Configura o temporizador e o alarme periódico
@@ -122,8 +141,6 @@ void loop(){
       lcd_escreve_1_linha(bvolta, 2);
       reload = false;
     }
-    delay(10); // Pequeno atraso para evitar flicker
-	
 }
 
 // Função principal da aplicação (ponto de entrada)
