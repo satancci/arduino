@@ -1,19 +1,32 @@
+/**
+ * @file projeto.c
+ * @brief Cronômetro com display LCD e botões de controle
+ * @details Este código implementa um cronômetro com controle de tempo de volta, utilizando um display LCD e botões para iniciar, pausar, reiniciar e zerar o cronômetro.
+ * @note O código utiliza interrupções para detectar os botões e um temporizador para controlar o tempo.
+ * @note O cronômetro é exibido em um display LCD, e o tempo de volta é atualizado a cada vez que o botão de volta é pressionado.
+ * @author Ricson Paulo
+ * @date 2025-05-14
+ * @version 1.0
+ */
+
 #include "driver/gptimer.h" // Inclui driver do temporizador GPTIMER
 #include "display_lcd.c"    // Inclui funções para controle do display LCD
 #include "driver/gpio.h"    // Inclui driver para manipulação de GPIOs (pinos digitais)
 #include "stdint.h"         // Inclui definições de tipos inteiros padrão (uint8_t, uint16_t, etc)
 #include "esp_attr.h"       // Inclui atributos especiais para funções (ex: IRAM_ATTR)
 #include "esp_task_wdt.h"   // Inclui funções para manipulação do watchdog timer
-#include "esp_timer.h"
-#include "esp_log.h"
+#include "esp_timer.h"      // Inclui funções para manipulação de temporizadores
+#include "esp_log.h"        // Inclui funções de log do ESP-IDF
 
-uint16_t milesimo, vmilesimo; // Variáveis para milésimos do cronômetro e da volta
-uint8_t segundo, vsegundo;    // Variáveis para segundos do cronômetro e da volta
-uint8_t minuto, vminuto;      // Variáveis para minutos do cronômetro e da volta
+uint16_t milesimo, vmilesimo;   // Variáveis para milésimos do cronômetro e da volta
+uint8_t minuto, vminuto, segundo, vsegundo;        // Variáveis para minutos e segundos do cronômetro e da volta
 
-bool habilitado = false;  // Flag que indica se o cronômetro está rodando
-bool reload; 
-// Estrutura de configuração dos pinos do display LCD
+bool habilitado, reload;        // Flag que indica se o cronômetro está rodando, Flag que indica se o cronômetro de volta deve ser reiniciado
+
+/**
+ * @brief Configuração do display LCD
+ * @details Define os pinos do display LCD e inicializa a configuração.sss
+ */
 display_lcd_config_t config_display = {
     .D4 = 5,  // Pino D4 do LCD conectado ao GPIO 5
     .D5 = 6,  // Pino D5 do LCD conectado ao GPIO 6
@@ -23,7 +36,12 @@ display_lcd_config_t config_display = {
     .E  = 10  // Pino E do LCD conectado ao GPIO 10
 };
 
-// Função de interrupção chamada ao pressionar um botão
+/**
+ * @brief Função de interrupção para os botões
+ * @param arg Argumento passado para a função de interrupção
+ * @return void
+ * @details Esta função é chamada quando um botão é pressionado. Ela desabilita a interrupção, inicia um temporizador de debounce e executa ações com base no botão pressionado.
+ */
 static void interrupcao(void *arg){
     void **args = (void **)arg;
     int botao = (int)(intptr_t)args[0];                     
@@ -41,20 +59,37 @@ static void interrupcao(void *arg){
     }
 }
 
-// Função de callback chamada pelo temporizador a cada alarme
+/**
+ * @brief Função de alarme do temporizador
+ * @param temporizador Handle do temporizador
+ * @param edata Dados do evento de alarme
+ * @param user_ctx Contexto do usuário
+ * @return true, se o alarme foi tratado com sucesso
+ * @details Esta função é chamada quando o alarme do temporizador é acionado. Ela incrementa os milésimos e segundos do cronômetro.
+ */
 bool IRAM_ATTR alarme(gptimer_handle_t temporizador, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     if(habilitado) (milesimo++, vmilesimo++); // Incrementa milésimos se o cronômetro estiver habilitado
     return true; // Indica que o alarme foi tratado
 }
 
-// Função de callback chamada pelo temporizador para debouncing
+/**
+ * @brief Função de callback do temporizador de debounce
+ * @param arg Argumento passado para a função de callback
+ * @return void
+ * @details Esta função é chamada após o tempo de debounce. Ela reabilita a interrupção do botão.
+ */
 static void debounce_timer_callback(void *arg) {
     int pino = (int)(intptr_t)arg;
     while(gpio_get_level(pino) == 0) {} // Enquanto o botao ainda está pressionado
     gpio_intr_enable(pino); // Reabilita a interrupcao
 }
 
-// Configura a interrupção para um pino específico
+/**
+ * @brief Configura a interrupção para os botões
+ * @param pino_isr Pino do botão a ser configurado
+ * @return void
+ * @details Esta função configura o pino do botão como entrada com pull-up, instala o serviço de interrupção e associa a função de interrupção ao pino.
+ */
 void configura_isr(unsigned int pino_isr){
     esp_timer_handle_t debounce_timer; // Instancia o manipulador do timer
     const esp_timer_create_args_t timer_args = {
@@ -81,7 +116,12 @@ void configura_isr(unsigned int pino_isr){
     gpio_isr_handler_add(pino_isr, interrupcao, args); // Associa a função de interrupção ao pino, passando dois argumentos
 }
 
-// Configura o temporizador e o alarme periódico
+/**
+ * @brief Configura o temporizador e o alarme
+ * @param tempo_alarme Tempo do alarme em microssegundos
+ * @return void
+ * @details Esta função configura o temporizador GPTIMER, define a contagem, a resolução e o alarme. Ela também registra a função de alarme e inicia o temporizador.
+ */
 void configura_alarme(uint64_t tempo_alarme){
     gptimer_handle_t temporizador = NULL; // Handle do temporizador
     gptimer_config_t config_temporizador = {
@@ -107,12 +147,12 @@ void configura_alarme(uint64_t tempo_alarme){
     gptimer_start(temporizador);                                      // Inicia o temporizador
 }
 
-// Função de atraso (delay) baseada em laço ocupado
-void delay(int ciclos){
-    for (volatile int i = 0; i < ciclos * 10000; i++); // Espera ocupada
-}
-
-// Função de inicialização do sistema
+/**
+ * @brief Função de configuração inicial dos componentes
+ * @param void
+ * @return void
+ * @details Esta função é chamada no início do programa. Ela desabilita o watchdog timer, inicializa o display LCD, configura as interrupções dos botões e configura o alarme do temporizador.
+ */
 void setup(){
     esp_task_wdt_deinit();         // Desabilita o watchdog timer da task principal
     lcd_config(&config_display);   // Inicializa o display LCD
@@ -121,7 +161,12 @@ void setup(){
     lcd_escreve_2_linhas("Tempo 00:00:000", "Volta 00:00:000");
 }
 
-// Função principal de repetição (loop)
+/**
+ * @brief Função principal do loop
+ * @param void
+ * @return void
+ * @details Esta função é chamada repetidamente no loop principal. Ela atualiza o tempo do cronômetro e o tempo de volta, e exibe as informações no display LCD.
+ */
 void loop(){
     if(milesimo >= 1000) (segundo++, milesimo = 0); // 1000 ms = 1 s
     if(segundo >= 60)   (minuto++, segundo = 0);    // 60 s = 1 min
@@ -143,10 +188,13 @@ void loop(){
     }
 }
 
-// Função principal da aplicação (ponto de entrada)
+/**
+ * @brief Função principal do programa
+ * @param void
+ * @return void
+ * @details Esta função é chamada no início do programa. Ela inicializa o sistema (setup) e entra em um loop infinito (loop).
+ */
 void app_main(void) {
-    setup();         // Inicializa o sistema
-    while (1) {      // Loop infinito
-        loop();      // Executa o loop principal
-    }
+    setup();        
+    while(1) loop();
 }
