@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
 
@@ -24,12 +25,9 @@ void task_two(void *task2_params) {
     }
 }
 void app_main(void) {
-
     mutex = xSemaphoreCreateMutex();
-    
-    mutex == NULL ? (
-        ESP_LOGE("Main", "Falha ao criar o mutex!"), return) : 
-        ESP_LOGI("Main", "Mutex criado com sucesso!");
+    mutex == NULL? (ESP_LOGE("Main", "Falha ao criar o mutex!"), return): 
+                    ESP_LOGI("Main", "Mutex criado com sucesso!");
 
     xTaskCreate(task_one, "Task One", 2048, NULL, 5, NULL);
     xTaskCreate(task_two, "Task Two", 2048, NULL, 5, NULL);
